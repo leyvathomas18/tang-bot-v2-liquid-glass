@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TANG BOT · Física 1</title>
+<meta name="description" content="TANG BOT: tutor con IA de Física 1 (electricidad y magnetismo) y simulador de circuitos." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='9' fill='%2300e5ff'/><ellipse cx='50' cy='50' rx='42' ry='16' fill='none' stroke='%2300e5ff' stroke-width='5'/><ellipse cx='50' cy='50' rx='42' ry='16' fill='none' stroke='%23ffb300' stroke-width='5' transform='rotate(60 50 50)'/><ellipse cx='50' cy='50' rx='42' ry='16' fill='none' stroke='%23ff4081' stroke-width='5' transform='rotate(-60 50 50)'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<style>
+  :root{
+    --bg:#060b1a; --panel:rgba(13,22,45,.78); --panel-2:rgba(20,32,64,.85);
+    --line:rgba(0,229,255,.18); --cyan:#00e5ff; --amber:#ffb300; --pink:#ff4081;
+    --text:#e6f1ff; --muted:#8fa3c7; --user:#0d3b66;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);
+    overflow:hidden;
+  }
+  /* Fondo: cuadrícula tipo plano + campo de partículas */
+  #field{position:fixed;inset:0;z-index:0}
+  .grid{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(var(--line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:40px 40px;
+    mask-image:radial-gradient(ellipse at center,#000 30%,transparent 80%);
+    opacity:.35;
+  }
+  .formulas{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .formulas span{
+    position:absolute;font-family:"JetBrains Mono",monospace;color:var(--cyan);
+    opacity:.07;font-size:22px;white-space:nowrap;animation:drift 40s linear infinite;
+  }
+  @keyframes drift{from{transform:translateY(0)}to{transform:translateY(-120vh)}}
+
+  .app{position:relative;z-index:1;display:grid;grid-template-columns:300px 1fr;height:calc(100dvh - 52px)}
+
+  /* Barra lateral */
+  aside{
+    background:var(--panel);backdrop-filter:blur(14px);border-right:1px solid var(--line);
+    padding:20px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:18px;
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .atom{width:48px;height:48px;flex:none}
+  .atom .o{transform-origin:50% 50%;animation:spin 6s linear infinite}
+  .atom .o2{animation-duration:9s;animation-direction:reverse}
+  .atom .o3{animation-duration:12s}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .brand h1{
+    font-family:Orbitron,sans-serif;font-weight:800;font-size:22px;margin:0;letter-spacing:2px;
+    background:linear-gradient(90deg,var(--cyan),var(--amber));-webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .brand small{color:var(--muted);font-size:12px;display:block;margin-top:2px}
+  .section-title{font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:2px;color:var(--amber);margin:0 0 8px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    border:1px solid var(--line);background:rgba(0,229,255,.06);color:var(--text);
+    border-radius:999px;padding:6px 10px;font-size:12.5px;cursor:pointer;transition:.2s;
+  }
+  .chip:hover{border-color:var(--cyan);background:rgba(0,229,255,.15)}
+  .example{
+    width:100%;text-align:left;border:1px solid var(--line);background:var(--panel-2);color:var(--text);
+    border-radius:12px;padding:10px 12px;font-size:12.5px;cursor:pointer;line-height:1.4;margin-bottom:8px;transition:.2s;
+  }
+  .example:hover{border-color:var(--amber)}
+  .example b{color:var(--amber);font-weight:600;display:block;font-size:11px;letter-spacing:1px;margin-bottom:3px}
+  table.const{width:100%;border-collapse:collapse;font-size:12px}
+  table.const td{padding:5px 4px;border-bottom:1px dashed var(--line)}
+  table.const td:first-child{color:var(--muted)}
+  table.const td:last-child{text-align:right;font-family:"JetBrains Mono",monospace;color:var(--cyan)}
+  .new-chat{
+    border:1px solid var(--pink);background:transparent;color:var(--pink);border-radius:12px;
+    padding:10px;font-weight:600;cursor:pointer;font-family:Inter;
+  }
+  .new-chat:hover{background:rgba(255,64,129,.12)}
+
+  /* Zona principal */
+  main{display:flex;flex-direction:column;min-width:0;height:100%}
+  header.top{
+    display:none;align-items:center;gap:10px;padding:10px 14px;
+    background:var(--panel);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
+  }
+  header.top h1{font-family:Orbitron;font-size:18px;margin:0;letter-spacing:2px;color:var(--cyan)}
+  .menu-btn{background:none;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:6px 10px;font-size:18px;cursor:pointer}
+
+  #chat{flex:1;overflow-y:auto;padding:28px 6vw 20px;scroll-behavior:smooth}
+  .welcome{max-width:760px;margin:6vh auto 0;text-align:center}
+  .welcome .big-atom{width:130px;height:130px;filter:drop-shadow(0 0 18px rgba(0,229,255,.5))}
+  .welcome h2{font-family:Orbitron;font-size:clamp(26px,5vw,42px);margin:16px 0 6px;letter-spacing:4px;
+    background:linear-gradient(90deg,var(--cyan),#fff,var(--amber));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .welcome p{color:var(--muted);line-height:1.6;margin:0 auto;max-width:560px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:26px}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);padding:14px;text-align:left;cursor:pointer;transition:.25s}
+  .card:hover{transform:translateY(-3px);border-color:var(--cyan);box-shadow:0 8px 24px rgba(0,229,255,.12)}
+  .card .ic{font-size:22px}
+  .card h4{margin:6px 0 4px;font-size:14px}
+  .card span{font-size:12px;color:var(--muted)}
+
+  .msg{max-width:860px;margin:0 auto 18px;display:flex;gap:12px;animation:pop .3s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .msg .avatar{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:15px;font-weight:700}
+  .msg.bot .avatar{background:radial-gradient(circle,#0a2a4a,#061226);border:1px solid var(--cyan);color:var(--cyan)}
+  .msg.user{flex-direction:row-reverse}
+  .msg.user .avatar{background:var(--amber);color:#1a1200}
+  .bubble{
+    padding:14px 18px;border-radius:var(--radius);line-height:1.65;font-size:15px;min-width:0;max-width:100%;
+    overflow-x:auto;
+  }
+  .msg.bot .bubble{background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px)}
+  .msg.user .bubble{background:linear-gradient(135deg,#0d3b66,#14508a);border:1px solid rgba(255,179,0,.3)}
+  .bubble img.attached{max-width:240px;border-radius:10px;display:block;margin-bottom:8px}
+  .bubble h3{font-family:Orbitron;font-size:14px;letter-spacing:1px;color:var(--amber);margin:18px 0 6px;font-weight:600}
+  .bubble h3:first-child{margin-top:0}
+  .bubble strong{color:#fff}
+  .bubble code{font-family:"JetBrains Mono";background:rgba(0,229,255,.08);padding:1px 5px;border-radius:5px;font-size:13px}
+  .bubble pre{background:#030712;padding:12px;border-radius:10px;overflow-x:auto}
+  .bubble table{border-collapse:collapse;margin:8px 0}
+  .bubble th,.bubble td{border:1px solid var(--line);padding:5px 9px}
+  .bubble .katex-display{overflow-x:auto;overflow-y:hidden;padding:6px 0;margin:10px 0;
+    background:rgba(0,229,255,.04);border-left:3px solid var(--cyan);border-radius:6px}
+  .bubble .katex{font-size:1.08em}
+  .meta{font-size:11px;color:var(--muted);margin-top:8px;display:flex;gap:10px;align-items:center}
+  .meta button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0}
+  .meta button:hover{color:var(--cyan)}
+  .error{border-color:var(--pink)!important;color:#ffc1d6}
+
+  /* Indicador "pensando": partícula oscilando */
+  .thinking{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+  .pendulum{width:60px;height:22px;position:relative}
+  .pendulum i{position:absolute;top:7px;width:8px;height:8px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 10px var(--cyan);animation:shm 1.2s ease-in-out infinite alternate}
+  .pendulum i:nth-child(2){animation-delay:.15s;background:var(--amber);box-shadow:0 0 10px var(--amber)}
+  .pendulum i:nth-child(3){animation-delay:.3s;background:var(--pink);box-shadow:0 0 10px var(--pink)}
+  @keyframes shm{from{left:0}to{left:52px}}
+
+  /* Caja de entrada */
+  .composer{padding:12px 6vw calc(14px + env(safe-area-inset-bottom));}
+  .preview{max-width:860px;margin:0 auto 8px;display:none;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+  .preview img{height:54px;border-radius:8px}
+  .preview button{margin-left:auto;background:none;border:none;color:var(--pink);font-size:18px;cursor:pointer}
+  .input-box{
+    max-width:860px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:20px;padding:8px;
+    backdrop-filter:blur(14px);box-shadow:0 0 0 0 rgba(0,229,255,0);transition:.25s;
+  }
+  .input-box:focus-within{border-color:var(--cyan);box-shadow:0 0 24px rgba(0,229,255,.18)}
+  textarea{
+    flex:1;resize:none;border:none;outline:none;background:transparent;color:var(--text);
+    font:15px Inter,sans-serif;max-height:180px;padding:9px 6px;line-height:1.45;
+  }
+  textarea::placeholder{color:#6f84aa}
+  .icon-btn{flex:none;width:42px;height:42px;border-radius:14px;border:none;cursor:pointer;display:grid;place-items:center;font-size:18px;transition:.2s}
+  .attach{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .attach:hover{color:var(--cyan);border-color:var(--cyan)}
+  .send{background:linear-gradient(135deg,var(--cyan),#0091ea);color:#00111a;font-weight:800}
+  .send:disabled{opacity:.4;cursor:not-allowed}
+  .hint{max-width:860px;margin:6px auto 0;text-align:center;font-size:11px;color:#5f7398}
+
+  .overlay{display:none}
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr}
+    aside{position:fixed;left:0;top:52px;bottom:0;width:86vw;max-width:320px;z-index:20;transform:translateX(-100%);transition:transform .3s}
+    aside.open{transform:none}
+    .overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:15}
+    header.top{display:flex}
+    #chat{padding:18px 12px}
+    .composer{padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+    .bubble{font-size:14.5px;padding:12px 14px}
+    .msg .avatar{width:28px;height:28px;font-size:13px}
+  }
+
+  [hidden]{display:none!important}
+  nav.tabs{position:relative;z-index:25;height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--panel);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  nav.tabs .logo{font-family:Orbitron;font-weight:800;letter-spacing:2px;color:var(--cyan);margin-right:10px}
+  .tab,.team-btn{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:10px;padding:8px 14px;font:600 13px Inter;cursor:pointer}
+  .tab.active{background:rgba(0,229,255,.16);border-color:var(--cyan);color:var(--cyan)}
+  .team-btn{margin-left:auto;color:var(--amber);border-color:rgba(255,179,0,.4)}
+  .meta button.on{color:var(--cyan)}
+  .sim{position:relative;z-index:1;display:grid;grid-template-columns:180px minmax(0,1fr) 270px;gap:10px;padding:10px;height:calc(100dvh - 52px)}
+  .sim>div{min-height:0}
+  .sp{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px;overflow-y:auto;backdrop-filter:blur(14px)}
+  .sim-mid{display:flex;flex-direction:column;gap:8px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+  .toolbar select,.lb input,.lb select{background:#030712;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:5px 6px;font:12px Inter}
+  .toolbar input[type=range]{width:90px;vertical-align:middle}
+  .sb{border:1px solid var(--line);background:var(--panel-2);color:var(--text);border-radius:10px;padding:7px 11px;font:600 12.5px Inter;cursor:pointer}
+  .sb:hover{border-color:var(--cyan)} .sb.go{background:linear-gradient(135deg,var(--cyan),#0091ea);color:#00111a;border:none}
+  #st{flex-basis:100%;height:18px;overflow:hidden;white-space:nowrap;text-align:right;font:12px "JetBrains Mono",monospace;color:var(--cyan)}
+  .cvwrap{flex:1;min-height:260px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#050a18}
+  #simCv{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  #scopeCv{width:100%;height:190px;flex:none;display:block;border:1px solid var(--line);border-radius:var(--radius)}
+  .pal{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel-2);color:var(--text);border-radius:10px;padding:8px;margin-bottom:6px;font:12.5px Inter;cursor:pointer}
+  .pal b{width:28px;text-align:center;color:var(--cyan);font-family:"JetBrains Mono",monospace}
+  .pal.on,.pal:hover{border-color:var(--amber)}
+  .muted,.hintp{color:var(--muted);font-size:12px;line-height:1.5}
+  .lb{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);margin:8px 0}
+  #props h4{margin:0 0 8px;color:var(--amber);font-size:14px}
+  .modal{position:fixed;inset:0;z-index:50;background:rgba(2,6,18,.75);display:grid;place-items:center;padding:14px;overflow-y:auto}
+  .mbox{position:relative;max-width:680px;width:100%;border:1px solid var(--line);border-radius:22px;padding:28px 22px;text-align:center;background:linear-gradient(160deg,#0b2a6b,#08143a)}
+  .mbox h2{font-family:Orbitron;margin:0 0 14px;font-size:clamp(20px,4vw,30px)}
+  .mbox .x{position:absolute;left:14px;top:14px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:transparent;color:#fff;cursor:pointer}
+  .badge{display:inline-block;background:var(--amber);color:#1a1200;font-weight:700;border-radius:8px;padding:8px 16px;font-size:14px}
+  .team{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px;margin:18px 0}
+  .team .av{width:70px;height:70px;border-radius:50%;margin:0 auto 8px;display:grid;place-items:center;font-size:34px;background:#fff;filter:hue-rotate(var(--h))}
+  .team span{display:block;background:rgba(255,255,255,.85);color:#16233f;border-radius:6px;padding:4px 6px;font-size:12px;line-height:1.3}
+  @media (max-width:900px){
+    .sim{grid-template-columns:1fr;height:auto;overflow-y:auto;position:fixed;inset:52px 0 0 0}
+    .cvwrap{height:420px;flex:none}
+    nav.tabs .logo{display:none}
+  }
+
+  /* ===== TANG BOT · Liquid Glass refinado + responsive ===== */
+  :root { --nav-h: 54px; }
+
+  .app {
+    height: calc(100vh - var(--nav-h));
+    height: calc(100dvh - var(--nav-h));
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  main {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #chat {
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(190,220,255,.28) transparent;
+    scroll-behavior: auto;
+    padding-bottom: 22px;
+  }
+  .composer { flex: 0 0 auto; position: relative; z-index: 3; }
+  .input-box { min-width: 0; }
+  #input { min-width: 0; }
+  .msg { width: 100%; }
+  .msg .bubble { overflow-wrap: anywhere; }
+
+  button, .card { -webkit-tap-highlight-color: transparent; }
+
+  /* El material de vidrio: capas claras, reflejo superior y borde luminoso */
+  .tab, .team-btn, .menu-btn, .new-chat, .chip, .example,
+  .icon-btn, .meta button, .sb, .pal, .preview button, .mbox .x {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 1px solid rgba(235,245,255,.27);
+    background:
+      linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.075) 48%, rgba(255,255,255,.035));
+    color: rgba(245,249,255,.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.38),
+      inset 0 -1px 0 rgba(255,255,255,.07),
+      0 8px 24px rgba(0,0,0,.18);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: blur(26px) saturate(180%);
+    transition: transform .2s ease, background .2s ease, border-color .2s ease,
+      box-shadow .2s ease, color .2s ease;
+  }
+  .tab::before, .team-btn::before, .menu-btn::before, .new-chat::before,
+  .chip::before, .example::before, .icon-btn::before, .sb::before,
+  .pal::before, .mbox .x::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(115deg,
+      rgba(255,255,255,.24) 0%,
+      rgba(255,255,255,.07) 28%,
+      transparent 55%,
+      rgba(255,255,255,.08) 100%);
+    opacity: .85;
+  }
+  .tab:hover, .team-btn:hover, .menu-btn:hover, .new-chat:hover,
+  .chip:hover, .example:hover, .icon-btn:hover, .sb:hover, .pal:hover,
+  .mbox .x:hover {
+    transform: translateY(-1px);
+    border-color: rgba(225,245,255,.58);
+    background: linear-gradient(145deg, rgba(255,255,255,.29), rgba(255,255,255,.09));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.48),
+      0 10px 28px rgba(0,0,0,.22),
+      0 0 18px rgba(180,225,255,.09);
+  }
+  .tab:active, .team-btn:active, .menu-btn:active, .new-chat:active,
+  .chip:active, .example:active, .icon-btn:active, .sb:active, .pal:active {
+    transform: scale(.985);
+  }
+
+  nav.tabs {
+    height: var(--nav-h);
+    min-height: var(--nav-h);
+    flex: 0 0 var(--nav-h);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    background: rgba(8,15,32,.62);
+    border-bottom: 1px solid rgba(225,240,255,.16);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+  }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs .logo, .tab, .team-btn { flex: 0 0 auto; white-space: nowrap; }
+  .tab.active {
+    color: #fff;
+    border-color: rgba(220,245,255,.68);
+    background: linear-gradient(145deg, rgba(255,255,255,.3), rgba(255,255,255,.105));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.52), 0 0 18px rgba(200,230,255,.1);
+  }
+  .team-btn { color: #ffe7a3; }
+
+  /* Nueva conversación: botón completo, legible y sin encogerse en la barra lateral */
+  aside { min-height: 0; }
+  .new-chat {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 48px;
+    flex: 0 0 auto;
+    padding: 12px 14px;
+    border-radius: 15px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+    font: 600 13.5px Inter, sans-serif;
+    color: #fff0f6;
+    border-color: rgba(255,190,220,.42);
+    background: linear-gradient(145deg, rgba(255,255,255,.23), rgba(255,255,255,.07));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 8px 22px rgba(0,0,0,.2);
+  }
+  .new-chat::after {
+    content: "";
+    position: absolute;
+    top: -70%;
+    left: -35%;
+    width: 55%;
+    height: 240%;
+    transform: rotate(24deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+    pointer-events: none;
+    transition: left .45s ease;
+  }
+  .new-chat:hover::after { left: 110%; }
+
+  .sb.go, .send {
+    color: #f4fcff;
+    border: 1px solid rgba(220,245,255,.48);
+    background: linear-gradient(145deg, rgba(255,255,255,.3), rgba(0,190,230,.16));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.48), 0 7px 20px rgba(0,0,0,.18);
+  }
+  .send { width: 46px; height: 46px; border-radius: 15px; font-size: 20px; flex: 0 0 46px; }
+  .send:hover, .sb.go:hover {
+    background: linear-gradient(145deg, rgba(255,255,255,.38), rgba(0,190,230,.22));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 9px 25px rgba(0,0,0,.22);
+  }
+  .send:disabled { opacity: .42; transform: none; cursor: not-allowed; }
+  .attach { color: #e8f8ff; border-color: rgba(220,245,255,.28); }
+  .pal.on { border-color: rgba(255,220,150,.75); background: rgba(255,220,150,.17); color: #fff0c9; }
+
+  .card {
+    background: linear-gradient(145deg, rgba(255,255,255,.15), rgba(255,255,255,.045));
+    border-color: rgba(225,240,255,.2);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 8px 24px rgba(0,0,0,.14);
+  }
+  .input-box {
+    background: linear-gradient(145deg, rgba(255,255,255,.16), rgba(255,255,255,.055));
+    border-color: rgba(225,240,255,.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 12px 34px rgba(0,0,0,.2);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+  }
+  .input-box:focus-within {
+    border-color: rgba(220,245,255,.62);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 0 24px rgba(190,225,255,.13);
+  }
+  .preview, .msg.bot .bubble, .sp {
+    -webkit-backdrop-filter: blur(22px) saturate(165%);
+    backdrop-filter: blur(22px) saturate(165%);
+  }
+
+  @media (max-width: 860px) {
+    nav.tabs { gap: 6px; padding: 0 9px; }
+    nav.tabs .logo { display: none; }
+    .tab, .team-btn { padding: 8px 10px; font-size: 12px; }
+    .app {
+      height: calc(100vh - var(--nav-h));
+      height: calc(100dvh - var(--nav-h));
+      grid-template-columns: minmax(0,1fr);
+      min-height: 0;
+      overflow: hidden;
+    }
+    aside {
+      position: fixed;
+      left: 0;
+      top: var(--nav-h);
+      bottom: 0;
+      width: min(86vw, 340px);
+      max-width: 340px;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: max(16px, env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+      z-index: 40;
+      transform: translateX(-105%);
+      transition: transform .28s ease;
+      background: rgba(8,16,35,.84);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      backdrop-filter: blur(30px) saturate(180%);
+    }
+    aside.open { transform: translateX(0); }
+    .new-chat { width: 100%; min-height: 50px; margin: 2px 0; flex-shrink: 0; }
+    .overlay.show {
+      display: block;
+      position: fixed;
+      inset: var(--nav-h) 0 0;
+      z-index: 35;
+      background: rgba(0,0,0,.48);
+      -webkit-backdrop-filter: blur(3px);
+      backdrop-filter: blur(3px);
+    }
+    header.top {
+      min-height: 48px;
+      flex: 0 0 48px;
+      padding: 7px 12px;
+      background: rgba(8,15,32,.58);
+      -webkit-backdrop-filter: blur(24px) saturate(170%);
+      backdrop-filter: blur(24px) saturate(170%);
+    }
+    #chat { min-height: 0; flex: 1 1 0%; padding: 16px 12px 18px; }
+    .composer { padding: 9px 10px calc(9px + env(safe-area-inset-bottom)); }
+    .input-box { gap: 6px; padding: 6px; border-radius: 18px; }
+    textarea { font-size: 16px; min-height: 40px; max-height: 120px; padding: 9px 5px; }
+    .icon-btn { width: 40px; height: 40px; border-radius: 13px; }
+    .send { width: 42px; height: 42px; flex-basis: 42px; }
+    .bubble { font-size: 14px; padding: 11px 12px; }
+    .msg { gap: 8px; }
+    .msg .avatar { width: 28px; height: 28px; font-size: 12px; }
+    .welcome { margin-top: 3vh; }
+    .welcome .big-atom { width: 96px; height: 96px; }
+    .sim {
+      grid-template-columns: minmax(0,1fr);
+      height: calc(100dvh - var(--nav-h));
+      inset: var(--nav-h) 0 0;
+      padding: 8px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .cvwrap { height: min(54vh, 420px); min-height: 250px; flex: none; }
+    #scopeCv { height: 160px; }
+  }
+  @media (max-width: 380px) {
+    nav.tabs { gap: 5px; }
+    .tab, .team-btn { padding: 7px 8px; font-size: 11px; }
+    .composer { padding-left: 7px; padding-right: 7px; }
+    .hint { font-size: 10px; }
+  }
+  @media (max-height: 560px) and (max-width: 860px) {
+    aside { gap: 12px; }
+    .brand { gap: 8px; }
+    .atom { width: 40px; height: 40px; }
+    .welcome { margin-top: 10px; }
+    .welcome .big-atom { width: 70px; height: 70px; }
+    .welcome h2 { margin: 8px 0 4px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tab, .team-btn, .menu-btn, .new-chat, .chip, .example, .icon-btn, .sb, .pal { transition: none; }
+    #chat { scroll-behavior: auto; }
+  }
+
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<div class="grid"></div>
+<div class="formulas" id="formulas"></div>
+
+<nav class="tabs"><span class="logo">⚛ TANG BOT</span><button class="tab active" data-v="chat">💬 Chatbot IA</button><button class="tab" data-v="sim">🔌 Simulador de circuitos</button><button class="team-btn" onclick="showTeam(true)">👥 Equipo</button></nav>
+
+<div class="app" id="viewChat">
+  <aside id="sidebar">
+    <div class="brand">
+      <svg class="atom" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="8" fill="#00e5ff"/>
+        <g class="o"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#00e5ff" stroke-width="3"/><circle cx="94" cy="50" r="4" fill="#00e5ff"/></g>
+        <g class="o o2" style="transform:rotate(60deg)"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#ffb300" stroke-width="3" transform="rotate(60 50 50)"/></g>
+        <g class="o o3"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#ff4081" stroke-width="3" transform="rotate(-60 50 50)"/></g>
+      </svg>
+      <div><h1>TANG BOT</h1><small>Tutor de Física 1</small></div>
+    </div>
+
+    <button class="new-chat" onclick="newChat()">＋ Nueva conversación</button>
+
+    <div>
+      <p class="section-title">TEMAS</p>
+      <div class="chips" id="topics"></div>
+    </div>
+
+    <div>
+      <p class="section-title">EJERCICIOS DE EJEMPLO</p>
+      <div id="examples"></div>
+    </div>
+
+    <div>
+      <p class="section-title">CONSTANTES ÚTILES</p>
+      <table class="const">
+        <tr><td>Constante de Coulomb k</td><td>8.988×10⁹ N·m²/C²</td></tr>
+        <tr><td>Permitividad ε₀</td><td>8.854×10⁻¹² F/m</td></tr>
+        <tr><td>Permeabilidad μ₀</td><td>4π×10⁻⁷ T·m/A</td></tr>
+        <tr><td>Carga elemental e</td><td>1.602×10⁻¹⁹ C</td></tr>
+        <tr><td>Masa del electrón</td><td>9.109×10⁻³¹ kg</td></tr>
+        <tr><td>Masa del protón</td><td>1.673×10⁻²⁷ kg</td></tr>
+        <tr><td>Voltaje térmico (300 K)</td><td>25.9 mV</td></tr>
+      </table>
+    </div>
+  </aside>
+  <div class="overlay" id="overlay" onclick="toggleMenu(false)"></div>
+
+  <main>
+    <header class="top">
+      <button class="menu-btn" onclick="toggleMenu(true)" aria-label="Menú">☰</button>
+      <h1>TANG BOT</h1>
+    </header>
+
+    <div id="chat">
+      <div class="welcome" id="welcome">
+        <svg class="big-atom atom" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="8" fill="#00e5ff"/>
+          <g class="o"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#00e5ff" stroke-width="2.5"/><circle cx="94" cy="50" r="3.5" fill="#00e5ff"/></g>
+          <g class="o o2"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#ffb300" stroke-width="2.5" transform="rotate(60 50 50)"/></g>
+          <g class="o o3"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#ff4081" stroke-width="2.5" transform="rotate(-60 50 50)"/></g>
+        </svg>
+        <h2>TANG BOT</h2>
+        <p>Pregunta sobre <b>Física 1</b> (electrostática, circuitos, magnetismo, AC y diodos) o súbele una foto 📷. Te lo resuelvo paso a paso: datos, ecuaciones, desarrollo y verificación.</p>
+        <div class="cards" id="cards"></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="preview" id="preview"><img id="previewImg" alt="" /><span style="font-size:13px;color:var(--muted)">Imagen adjunta</span><button onclick="clearImage()" aria-label="Quitar">✕</button></div>
+      <div class="input-box">
+        <button class="icon-btn attach" onclick="document.getElementById('file').click()" title="Subir foto del ejercicio">📷</button>
+        <input type="file" id="file" accept="image/*" hidden />
+        <textarea id="input" rows="1" placeholder="Ej: Calcula la corriente en cada rama del circuito con dos mallas…"></textarea>
+        <button class="icon-btn send" id="send" onclick="send()" title="Enviar">➤</button>
+      </div>
+      <div class="hint">TANG BOT puede equivocarse. Revisa los cálculos importantes.</div>
+    </div>
+  </main>
+</div>
+
+<section class="sim" id="viewSim" hidden>
+  <div class="sp"><p class="section-title">COMPONENTES</p><div id="pal"></div>
+    <p class="hintp">Elige un componente y haz clic en el lienzo. Arrastra desde un punto (terminal) hasta otro para tender un cable. Un clic sobre el interruptor lo abre o cierra. R rota, Supr elimina. Todo circuito necesita una tierra (GND).</p></div>
+  <div class="sim-mid">
+    <div class="toolbar">
+      <button class="sb go" id="bRun">▶ Iniciar</button><button class="sb" id="bPause">⏸ Pausar</button><button class="sb" id="bReset">↺ Reiniciar</button>
+      <button class="sb" id="bRot">⟳ Rotar</button><button class="sb" id="bDel">🗑 Eliminar</button>
+      <label>Paso Δt <select id="dtS"><option value="1e-6">1 µs</option><option value="1e-5" selected>10 µs</option><option value="1e-4">100 µs</option><option value="1e-3">1 ms</option></select></label>
+      <label>Tiempo/div <select id="tdS"></select></label>
+      <label>Velocidad <input type="range" id="spd" min="10" max="500" value="200"></label>
+      <span id="st">Listo</span>
+    </div>
+    <div class="cvwrap"><canvas id="simCv"></canvas></div>
+    <canvas id="scopeCv"></canvas>
+  </div>
+  <div class="sp"><p class="section-title">PROPIEDADES</p><div id="props"></div>
+    <p class="section-title" style="margin-top:18px">OSCILOSCOPIO</p>
+    <label class="lb">Canal 1 (cian)<select id="ch0"></select></label>
+    <label class="lb">Canal 2 (ámbar)<select id="ch1"></select></label>
+    <label class="lb">Escala V/div o A/div · CH1<select id="vd0"></select></label>
+    <label class="lb">Escala V/div o A/div · CH2<select id="vd1"></select></label>
+    <p class="hintp">V = voltaje entre terminales; I = corriente. En el transistor: V = Vce, I = Ic. Las baterías muestran la corriente que entregan.</p></div>
+</section>
+
+<div class="modal" id="team" hidden>
+  <div class="mbox">
+    <button class="x" onclick="showTeam(false)" aria-label="Cerrar">✕</button>
+    <h2>¡Bienvenidos a TangBot!</h2>
+    <div class="badge">Integrantes del equipo</div>
+    <p style="margin:10px 0 0;font-weight:600">Universidad Científica del Sur</p>
+    <div class="team" id="members"></div>
+    <button class="sb go" style="padding:12px 26px;border-radius:999px" onclick="showTeam(false);openTab('chat')">Comenzar a chatear</button>
+  </div>
+</div>
+
+<script src="sim.js" defer></script>
+<script>
+/* ---------- Datos de la interfaz ---------- */
+const TOPICS = ["Electrostática y Coulomb","Campo eléctrico y Gauss","Potencial eléctrico","Condensadores","Corriente y ley de Ohm","Resistencias y potencia","Instrumentos de medición","Leyes de Kirchhoff","Circuitos RC","Fuerzas magnéticas","Biot-Savart y Ampère","Faraday y Lenz","Corriente alterna y fasores","Circuitos RLC y resonancia","Semiconductores y diodos","Rectificadores y Zener"];
+const EXAMPLES = [
+  ["ELECTROSTÁTICA","Dos cargas de +3 μC y −5 μC están separadas 20 cm. Calcula la fuerza entre ellas y el campo eléctrico en el punto medio."],
+  ["CONDENSADORES","Tres condensadores de 2 μF, 3 μF y 6 μF se conectan en serie a 12 V. Halla la capacitancia equivalente, la carga y la energía almacenada."],
+  ["KIRCHHOFF","Resuelve un circuito de dos mallas con baterías de 12 V y 6 V y resistencias de 4 Ω, 6 Ω y 3 Ω: halla las corrientes de cada rama."],
+  ["RC TRANSITORIO","Un condensador de 10 μF se carga a través de 2 kΩ desde 9 V. ¿Cuánto vale el voltaje a los 30 ms y cuál es la constante de tiempo?"],
+  ["INDUCCIÓN","Una espira circular de 0.1 m de radio está en un campo que crece de 0 a 0.5 T en 0.2 s. Calcula la fem inducida y el sentido de la corriente."],
+  ["RLC","Un circuito RLC serie con R = 50 Ω, L = 0.2 H y C = 5 μF se conecta a 120 V, 60 Hz. Calcula impedancia, corriente, factor de potencia y frecuencia de resonancia."],
+  ["ZENER","Una fuente de 15 V alimenta, mediante una resistencia en serie, un Zener de 5.1 V y una carga de 1 kΩ. Calcula la resistencia en serie adecuada."]
+];
+const CARDS = [
+  ["⚡","Electrostática","Coulomb, campo y Gauss","Explícame la ley de Gauss con un ejemplo resuelto de una esfera cargada."],
+  ["🔋","Circuitos DC","Ohm, Kirchhoff y RC","Explícame las leyes de Kirchhoff con un ejemplo resuelto de dos mallas."],
+  ["🧲","Magnetismo","Fuerzas, Ampère y Faraday","¿Cómo se calcula la fuerza magnética sobre una carga en movimiento? Dame un ejercicio."],
+  ["🔌","Diodos y AC","Fasores, RLC y rectificadores","Explícame cómo funciona un rectificador de media onda con diodo y filtro capacitivo."]
+];
+const FORMULAS = ["F = kq₁q₂/r²","∮E·dA = Q/ε₀","V = IR","C = Q/V","P = VI","ΣI = 0","ΣV = 0","τ = RC","F = qv × B","∮B·dl = μ₀I","ε = −dΦ/dt","Z = √(R²+X²)","f₀ = 1/(2π√LC)","I = I₀(e^{V/V_T}−1)","U = ½CV²","B = μ₀I/2πr"];
+
+/* ---------- Estado ---------- */
+let messages = [];       // {role:'user'|'assistant', text, image?}
+let pendingImage = null; // {data, mimeType, url}
+let busy = false;
+
+const $ = id => document.getElementById(id);
+const chat = $("chat"), input = $("input"), sendBtn = $("send");
+
+/* ---------- Construir barra lateral y tarjetas ---------- */
+TOPICS.forEach(t => {
+  const b = document.createElement("button"); b.className = "chip"; b.textContent = t;
+  b.onclick = () => ask(`Explícame el tema "${t}" de Física 1: concepto, fórmulas clave y un ejercicio resuelto.`);
+  $("topics").appendChild(b);
+});
+EXAMPLES.forEach(([tag, txt]) => {
+  const b = document.createElement("button"); b.className = "example";
+  b.innerHTML = `<b>${tag}</b>${txt}`; b.onclick = () => ask(txt);
+  $("examples").appendChild(b);
+});
+CARDS.forEach(([ic, h, s, q]) => {
+  const d = document.createElement("div"); d.className = "card";
+  d.innerHTML = `<div class="ic">${ic}</div><h4>${h}</h4><span>${s}</span>`; d.onclick = () => ask(q);
+  $("cards").appendChild(d);
+});
+FORMULAS.forEach((f, i) => {
+  const s = document.createElement("span"); s.textContent = f;
+  s.style.left = (Math.random() * 90) + "%"; s.style.top = (100 + Math.random() * 100) + "%";
+  s.style.animationDuration = (30 + Math.random() * 30) + "s"; s.style.animationDelay = (-i * 4) + "s";
+  $("formulas").appendChild(s);
+});
+
+/* ---------- Render markdown + LaTeX ---------- */
+function renderRich(text) {
+  const store = [];
+  const keep = (tex, display) => {
+    let html;
+    try { html = katex.renderToString(tex, { displayMode: display, throwOnError: false, strict: false }); }
+    catch { html = tex; }
+    store.push(html); return `@@MATH${store.length - 1}@@`;
+  };
+  let t = text
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, m) => keep(m, true))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, m) => keep(m, true))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, m) => keep(m, false))
+    .replace(/(^|[^\\$])\$([^\$\n]+?)\$/g, (_, pre, m) => pre + keep(m, false));
+  let html = window.marked ? marked.parse(t, { breaks: true }) : t.replace(/\n/g, "<br>");
+  return html.replace(/@@MATH(\d+)@@/g, (_, i) => store[+i]);
+}
+const escapeHtml = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- Mensajes ---------- */
+function addMessage(role, text, opts = {}) {
+  $("welcome")?.remove();
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + (role === "user" ? "user" : "bot");
+  const av = document.createElement("div"); av.className = "avatar"; av.textContent = role === "user" ? "Tú" : "⚛";
+  if (role === "user") av.style.fontSize = "11px";
+  const bubble = document.createElement("div"); bubble.className = "bubble" + (opts.error ? " error" : "");
+  if (opts.imageUrl) bubble.innerHTML = `<img class="attached" src="${opts.imageUrl}" alt="ejercicio" />`;
+  if (opts.thinking) {
+    bubble.innerHTML = `<div class="thinking"><div class="pendulum"><i></i><i></i><i></i></div>Calculando…</div>`;
+  } else if (role === "user") {
+    bubble.innerHTML += escapeHtml(text).replace(/\n/g, "<br>");
+  } else {
+    bubble.innerHTML += renderRich(text);
+    if (!opts.error) {
+      const meta = document.createElement("div"); meta.className = "meta";
+      const copy = document.createElement("button"); copy.textContent = "📋 Copiar";
+      copy.onclick = () => { navigator.clipboard.writeText(text); copy.textContent = "✔ Copiado"; setTimeout(() => copy.textContent = "📋 Copiar", 1500); };
+      const spk = document.createElement("button"); spk.className = "spk"; spk.textContent = "🔊 Escuchar";
+      spk.onclick = () => speak(text, spk);
+      meta.append(copy, spk); bubble.appendChild(meta);
+    }
+  }
+  wrap.append(av, bubble); chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return wrap;
+}
+
+function buildCards() {
+  const host = $("cards");
+  if (!host) return;
+  host.innerHTML = "";
+  CARDS.forEach(([ic, title, desc, prompt]) => {
+    const el = document.createElement("button");
+    el.className = "card";
+    el.type = "button";
+    el.innerHTML = `<div class="ic">${ic}</div><h4>${title}</h4><span>${desc}</span>`;
+    el.addEventListener("click", () => ask(prompt));
+    host.appendChild(el);
+  });
+}
+function ask(text) { input.value = text; toggleMenu(false); send(); }
+
+async function send() {
+  const text = input.value.trim();
+  if ((!text && !pendingImage) || busy) return;
+  busy = true; sendBtn.disabled = true;
+
+  const userMsg = { role: "user", text: text || "Resuelve el ejercicio de la imagen paso a paso." };
+  if (pendingImage) userMsg.image = { data: pendingImage.data, mimeType: pendingImage.mimeType };
+  messages.push(userMsg);
+  addMessage("user", userMsg.text, { imageUrl: pendingImage?.url });
+  input.value = ""; autoGrow(); clearImage();
+
+  const thinking = addMessage("assistant", "", { thinking: true });
+  try {
+    // Solo se reenvía la imagen del último mensaje para no gastar cuota
+    const payload = messages.map((m, i) => i === messages.length - 1 ? m : { role: m.role, text: m.text });
+    const r = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: payload })
+    });
+    const data = await r.json().catch(() => ({}));
+    thinking.remove();
+    if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
+    messages.push({ role: "assistant", text: data.text });
+    addMessage("assistant", data.text);
+    saveLocal();
+  } catch (e) {
+    thinking.remove();
+    messages.pop();
+    addMessage("assistant", `⚠️ **No pude responder.** ${e.message}\n\nSi dice *quota* o *429*, se alcanzó el límite gratuito por minuto: espera un momento y vuelve a intentar.`, { error: true });
+  } finally {
+    busy = false; sendBtn.disabled = false; input.focus();
+  }
+}
+
+function newChat() {
+  if (busy) return;
+  messages = [];
+  try { localStorage.removeItem("tangbot-fisica1"); } catch {}
+  chat.innerHTML = `
+    <div class="welcome" id="welcome">
+      <svg class="big-atom atom" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="8" fill="#00e5ff"/>
+        <g class="o"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#00e5ff" stroke-width="2.5"/><circle cx="94" cy="50" r="3.5" fill="#00e5ff"/></g>
+        <g class="o o2"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#ffb300" stroke-width="2.5" transform="rotate(60 50 50)"/></g>
+        <g class="o o3"><ellipse cx="50" cy="50" rx="44" ry="15" fill="none" stroke="#ff4081" stroke-width="2.5" transform="rotate(-60 50 50)"/></g>
+      </svg>
+      <h2>TANG BOT</h2>
+      <p>Pregunta sobre <b>Física 1</b> (electrostática, circuitos, magnetismo, AC y diodos) o súbele una foto 📷. Te lo resuelvo paso a paso: datos, ecuaciones, desarrollo y verificación.</p>
+      <div class="cards" id="cards"></div>
+    </div>`;
+  buildCards();
+  input.value = "";
+  autoGrow();
+  clearImage();
+  toggleMenu(false);
+  chat.scrollTop = 0;
+}
+
+/* ---------- Guardar conversación (sin imágenes) ---------- */
+function saveLocal() {
+  try { localStorage.setItem("tangbot-fisica1", JSON.stringify(messages.map(m => ({ role: m.role, text: m.text })).slice(-30))); } catch {}
+}
+function loadLocal() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("tangbot-fisica1") || "[]");
+    if (saved.length) { messages = saved; saved.forEach(m => addMessage(m.role, m.text)); }
+  } catch {}
+}
+
+/* ---------- Imagen ---------- */
+$("file").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(), reader = new FileReader();
+  reader.onload = () => {
+    img.onload = () => {
+      // Redimensionar a máx 1600 px para no exceder límites
+      const s = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = img.width * s; c.height = img.height * s;
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL("image/jpeg", 0.85);
+      pendingImage = { url, data: url.split(",")[1], mimeType: "image/jpeg" };
+      $("previewImg").src = url; $("preview").style.display = "flex";
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(f); e.target.value = "";
+});
+function clearImage() { pendingImage = null; $("preview").style.display = "none"; }
+
+/* ---------- Entrada ---------- */
+function autoGrow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 180) + "px"; }
+input.addEventListener("input", autoGrow);
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 860) { e.preventDefault(); send(); }
+});
+function toggleMenu(open) { $("sidebar").classList.toggle("open", open); $("overlay").classList.toggle("show", open); }
+
+/* ---------- Fondo: partículas con atracción (campo de fuerzas) ---------- */
+(function field() {
+  const cv = $("field"), ctx = cv.getContext("2d");
+  let W, H, P = [];
+  const mouse = { x: -999, y: -999 };
+  function resize() {
+    W = cv.width = innerWidth; H = cv.height = innerHeight;
+    const n = Math.min(90, Math.floor(W * H / 16000));
+    P = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4, c: ["#00e5ff", "#ffb300", "#ff4081"][Math.random() * 3 | 0] }));
+  }
+  addEventListener("resize", resize);
+  addEventListener("pointermove", e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  resize();
+  (function loop() {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of P) {
+      const dx = mouse.x - p.x, dy = mouse.y - p.y, d2 = dx * dx + dy * dy;
+      if (d2 < 40000) { p.vx += dx / d2 * 2; p.vy += dy / d2 * 2; }
+      p.vx *= .99; p.vy *= .99; p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1; if (p.y < 0 || p.y > H) p.vy *= -1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, 7); ctx.fillStyle = p.c; ctx.globalAlpha = .7; ctx.fill();
+    }
+    ctx.globalAlpha = 1; ctx.strokeStyle = "rgba(0,229,255,.08)";
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const a = P[i], b = P[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 110) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+
+/* ---------- Voz, pestañas y equipo ---------- */
+function speak(md, btn) {
+  const s = window.speechSynthesis;
+  if (!s) { alert("Tu navegador no admite lectura por voz."); return; }
+  const was = btn.classList.contains("on");
+  s.cancel(); document.querySelectorAll(".spk").forEach(b => { b.classList.remove("on"); b.textContent = "🔊 Escuchar"; });
+  if (was) return;
+  const clean = md.replace(/\$\$[\s\S]+?\$\$/g, " fórmula. ")
+    .replace(/\$([^$\n]+)\$/g, (_, m) => " " + m.replace(/\\[a-zA-Z]+/g, " ").replace(/[{}^_]/g, " ") + " ")
+    .replace(/\p{Extended_Pictographic}/gu, "").replace(/[#*`>|]/g, "");
+  const u = new SpeechSynthesisUtterance(clean); u.lang = "es-ES";
+  const v = s.getVoices().find(v => v.lang.toLowerCase().startsWith("es")); if (v) u.voice = v;
+  u.onend = u.onerror = () => { btn.classList.remove("on"); btn.textContent = "🔊 Escuchar"; };
+  btn.classList.add("on"); btn.textContent = "⏹ Detener"; s.speak(u);
+}
+function openTab(v) {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.v === v));
+  $("viewChat").hidden = v !== "chat";
+  $("viewSim").hidden = v !== "sim";
+  toggleMenu(false);
+  // Recalcula el área desplazable al volver del simulador al chat.
+  if (v === "chat") requestAnimationFrame(() => {
+    chat.scrollTop = chat.scrollHeight;
+    input.focus({ preventScroll: true });
+  });
+}
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => openTab(b.dataset.v));
+const MEMBERS = ["Daniel Fredy Vela Gutti","Valentino Máximo Estefano Zapata López","Leider Jhosting Tuesta Trujillo","Neyver Marchena Miranda","Kimberly Herrera Medina","Thomas Benjamin Leyva Sencia","Braian Alexander Loayza Villalobos","Jair Antonio Padilla Abarca"];
+MEMBERS.forEach((n, i) => { const d = document.createElement("div"); d.innerHTML = `<div class="av" style="--h:${i * 45}deg">🤖</div><span>${n}</span>`; $("members").appendChild(d); });
+function showTeam(on) { $("team").hidden = !on; }
+try { if (!sessionStorage.getItem("tang-team")) { showTeam(true); sessionStorage.setItem("tang-team", "1"); } } catch { showTeam(true); }
+
+window.addEventListener("DOMContentLoaded", loadLocal);
+</script>
+</body>
+</html>
